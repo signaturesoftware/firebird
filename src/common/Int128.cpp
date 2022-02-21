@@ -612,6 +612,7 @@ void Int128::overflow()
 	(Arg::Gds(isc_arith_except) << Arg::Gds(isc_exception_integer_overflow)).raise();
 }
 
+
 #ifdef DEV_BUILD
 const char* Int128::show()
 {
@@ -645,4 +646,33 @@ CInt128 MAX_Int128(CInt128::MkMax);
 } // namespace Firebird
 
 #endif // FB_USE_ABSEIL_INT128
+
+
+// implementation independent part
+
+namespace Firebird
+{
+
+ULONG Int128::makeIndexKey(vary* buf, int exp)
+{
+	fb_assert(-128 <= exp && exp <= 127);
+
+	unsigned char coeff[Pmax + 2];
+	memset(coeff, 0, sizeof(coeff));
+
+	unsigned char* c = &coeff[Pmax];
+	for(Int128 v = abs(); v.sign(); )
+	{
+		unsigned int m;
+		v.divMod(10, &m);
+
+		fb_assert(m < 10);
+		fb_assert(c >= coeff);
+		*--c = m;
+	}
+
+	return Decimal128::makeBcdKey(buf, coeff, sign() < 0, exp, Bias, Pmax);
+}
+
+} // namespace Firebird
 
