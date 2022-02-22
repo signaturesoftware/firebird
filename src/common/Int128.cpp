@@ -658,10 +658,8 @@ ULONG Int128::makeIndexKey(vary* buf, int exp)
 	fb_assert(-128 <= exp && exp <= 127);
 
 	unsigned char coeff[Pmax + 2];
-	memset(coeff, 0, sizeof(coeff));
-
 	unsigned char* c = &coeff[Pmax];
-	for(Int128 v = abs(); v.sign(); )
+	for (Int128 v = abs(); v.sign(); )
 	{
 		unsigned int m;
 		v.divMod(10, &m);
@@ -670,6 +668,7 @@ ULONG Int128::makeIndexKey(vary* buf, int exp)
 		fb_assert(c >= coeff);
 		*--c = m;
 	}
+	memset(coeff, 0, c - coeff);
 
 	return Decimal128::makeBcdKey(buf, coeff, sign() < 0, exp, Bias, Pmax);
 }
