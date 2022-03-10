@@ -147,8 +147,7 @@ namespace {
 		cstring oldValue;
 	};
 
-	GlobalPtr<SortedArray<rem_port*> > outPorts;
-	GlobalPtr<Mutex> outPortsMutex;
+	GlobalPtr<PortsCleanup> outPorts;
 }
 
 namespace Remote {
@@ -999,16 +998,13 @@ void RProvider::shutdown(CheckStatusWrapper* status, unsigned int /*timeout*/, c
 {
 	status->init();
 
-	// make OS abort all outgoing connections
-	MutexLockGuard g(outPortsMutex, FB_FUNCTION);
-	for (auto p = outPorts->begin(); p != outPorts->end(); ++p)
+	try
 	{
-		rem_port* port = *p;
-		if (port->port_async)
-			port->port_async->down();
-
-		port->port_flags |= PORT_disconnect;
-		port->down();
+		outPorts->closePorts();
+	}
+	catch (const Exception& ex)
+	{
+		ex.stuffException(status);
 	}
 }
 
@@ -7395,9 +7391,7 @@ static rem_port* analyze(ClntAuthBlock& cBlock, PathName& attach_name, unsigned 
 		throw;
 	}
 
-	MutexLockGuard g(outPortsMutex, FB_FUNCTION);
-	outPorts->add(port);
-
+	outPorts->registerPort(port);
 	return port;
 }
 
@@ -7826,12 +7820,7 @@ static void disconnect(rem_port* port, bool rmRef)
 	// Remove from active ports
 
 	if (rmRef)
-	{
-		MutexLockGuard g(outPortsMutex, FB_FUNCTION);
-		FB_SIZE_T pos;
-		if (outPorts->find(port, pos))
-			outPorts->remove(pos);
-	}
+		outPorts->unRegisterPort(port);
 }
 
 
