@@ -3314,15 +3314,15 @@ void JAttachment::freeEngineData(CheckStatusWrapper* user_status, bool forceFree
 
 			unsigned flags = PURGE_LINGER;
 
-			if (engineShutdown ||
+			if (engineShutdown)
+				flags |= PURGE_FORCE;
+
+			if (forceFree ||
 				(dbb->dbb_ast_flags & DBB_shutdown) ||
 				(attachment->att_flags & ATT_shutdown))
 			{
-				flags |= PURGE_FORCE;
-			}
-
-			if (forceFree)
 				flags |= PURGE_NOCHECK;
+			}
 
 			ISC_STATUS reason = 0;
 			if (!forceFree)
@@ -8202,8 +8202,13 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 					transaction = TRA_start(tdbb, 0, NULL);
 					attachment->att_flags = save_flags;
 
+					// Allow cancelling while ON DISCONNECT triggers are running
+					tdbb->tdbb_flags &= ~TDBB_detaching;
+
 					// run ON DISCONNECT triggers
 					EXE_execute_db_triggers(tdbb, transaction, TRIGGER_DISCONNECT);
+
+					tdbb->tdbb_flags |= TDBB_detaching;
 
 					// and commit the transaction
 					TRA_commit(tdbb, transaction, false);
@@ -8211,6 +8216,18 @@ static void purge_attachment(thread_db* tdbb, StableAttachmentPart* sAtt, unsign
 				catch (const Exception& ex)
 				{
 					attachment->att_flags = save_flags;
+					tdbb->tdbb_flags |= TDBB_detaching;
+
+					if (attachment->att_trace_manager->needs(ITraceFactory::TRACE_EVENT_ERROR))
+					{
+						FbLocalStatus status;
+						ex.stuffException(&status);
+
+						TraceConnectionImpl conn(attachment);
+						TraceStatusVectorImpl traceStatus(&status, TraceStatusVectorImpl::TS_ERRORS);
+
+						attachment->att_trace_manager->event_error(&conn, &traceStatus, FB_FUNCTION);
+					}
 
 					string s;
 					s.printf("Database: %s\n\tError at disconnect:", attachment->att_filename.c_str());
@@ -8605,7 +8622,7 @@ namespace
 				{
 					// purge attachment, rollback any open transactions
 					attachment->att_use_count++;
-					purge_attachment(tdbb, sAtt, PURGE_FORCE);
+					purge_attachment(tdbb, sAtt, engineShutdown ? PURGE_FORCE : PURGE_NOCHECK);
 				}
 				catch (const Exception& ex)
 				{
@@ -8927,11 +8944,8 @@ ISC_STATUS thread_db::getCancelState(ISC_STATUS* secondary)
 	if (tdbb_flags & (TDBB_verb_cleanup | TDBB_dfw_cleanup | TDBB_detaching | TDBB_wait_cancel_disable))
 		return FB_SUCCESS;
 
-	if (attachment)
+	if (attachment && attachment->att_purge_tid != Thread::getId())
 	{
-		if (attachment->att_purge_tid == Thread::getId())
-			return FB_SUCCESS;
-
 		if (attachment->att_flags & ATT_shutdown)
 		{
 			if (database->dbb_ast_flags & DBB_shutdown)

@@ -1200,7 +1200,19 @@ void EXE_execute_triggers(thread_db* tdbb,
 					&tdbb->getAttachment()->att_original_timezone,
 					tdbb->getAttachment()->att_current_timezone);
 
-				EXE_start(tdbb, trigger, transaction);
+				if (trigger_action == TRIGGER_DISCONNECT)
+				{
+					if (!trigger->req_timer)
+						trigger->req_timer = FB_NEW_POOL(*tdbb->getAttachment()->att_pool) TimeoutTimer();
+
+					const unsigned int timeOut = tdbb->getDatabase()->dbb_config->getOnDisconnectTrigTimeout() * 1000;
+					trigger->req_timer->setup(timeOut, isc_cfg_stmt_timeout);
+					trigger->req_timer->start();
+					thread_db::TimerGuard timerGuard(tdbb, trigger->req_timer, true);
+					EXE_start(tdbb, trigger, transaction); // Under timerGuard scope
+				}
+				else
+					EXE_start(tdbb, trigger, transaction);
 			}
 
 			const bool ok = (trigger->req_operation != jrd_req::req_unwind);
@@ -1231,6 +1243,14 @@ void EXE_execute_triggers(thread_db* tdbb,
 			trigger->req_flags &= ~req_in_use;
 
 			ex.stuffException(tdbb->tdbb_status_vector);
+
+			if (trigger_action == TRIGGER_DISCONNECT &&
+				!(tdbb->tdbb_flags & TDBB_stack_trace_done) && (tdbb->tdbb_flags & TDBB_sys_error))
+			{
+				stuff_stack_trace(trigger);
+				tdbb->tdbb_flags |= TDBB_stack_trace_done;
+			}
+
 			trigger_failure(tdbb, trigger);
 		}
 

@@ -271,7 +271,7 @@ void TraceManager::update_session(const TraceSession& session)
 				curr_user = attachment->getUserName().c_str();
 
 				if (session.ses_auth.hasData())
-				{ // scope
+				{
 					AutoSetRestoreFlag<ULONG> autoRestore(&attachment->att_flags, ATT_mapping, true);
 
 					Database* dbb = attachment->att_database;
@@ -283,6 +283,8 @@ void TraceManager::update_session(const TraceSession& session)
 					mapping.setSecurityDbAlias(dbb->dbb_config->getSecurityDatabase(), dbb->dbb_filename.c_str());
 					mapping.setDb(attachment->att_filename.c_str(), dbb->dbb_filename.c_str(),
 						attachment->getInterface());
+
+					EngineCheckout guard(attachment, FB_FUNCTION);
 					mapResult = mapping.mapUser(s_user, t_role);
 				}
 			}
