@@ -28,26 +28,8 @@ namespace Auth {
 	}
 
 
-	void UserDatabases::getInstance(IPluginConfig* pluginConfig, CachedUserDatabase::Instance& instance)
+	void UserDatabases::getInstance(PathName secDbName, CachedUserDatabase::Instance& instance)
 	{
-		// Determine sec.db name based on existing config
-		PathName secDbName;
-		{ // config scope
-			FbLocalStatus s;
-			RefPtr<IFirebirdConf> config(REF_NO_INCR, pluginConfig->getFirebirdConf(&s));
-			check(&s);
-
-			static GlobalPtr<ConfigKeys> keys;
-			unsigned int secDbKey = keys->getKey(config, "SecurityDatabase");
-			const char* tmp = config->asString(secDbKey);
-			if (!tmp)
-				Arg::Gds(isc_secdb_name).raise();
-
-			secDbName = tmp;
-		}
-
-		secDbName.assign("D:\\ICE\\PRINT SOEICE.FDB");
-
 		{ // guard scope
 			MutexLockGuard g(arrayMutex, FB_FUNCTION);
 			for (unsigned int i = 0; i < dbArray.getCount(); )

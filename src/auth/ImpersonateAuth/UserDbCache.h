@@ -100,7 +100,7 @@ namespace Auth {
 		Firebird::Mutex arrayMutex;
 
 	public:
-		void getInstance(Firebird::IPluginConfig* pluginConfig, CachedUserDatabase::Instance& instance);
+		void getInstance(Firebird::PathName secDbName, CachedUserDatabase::Instance& instance);
 		int shutdown();
 		void handler(CachedUserDatabase* tgt);
 	};

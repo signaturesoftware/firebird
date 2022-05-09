@@ -222,7 +222,7 @@ namespace Auth {
 		Arg::Gds secDbError(userError);
 
 		string message;
-		message.printf("Error in %s() API call when working with legacy security database", callName);
+		message.printf("Error in %s() API call when working with user database", callName);
 		secDbError << Arg::Gds(isc_random) << message;
 
 		secDbError << Arg::StatusVector(status);

@@ -406,17 +406,39 @@ int ImpersonateServer::authenticate(CheckStatusWrapper* status, IServerBlock* sB
 
 		unsigned int length;
 		const unsigned char* val = sBlock->getData(&length);
+
+		int usernameLength = 0;
+		memcpy(&usernameLength, val, sizeof(int));
+
+		val += sizeof(int);
+		char username[200];
+		memcpy(username, val, usernameLength);
+
+		val += usernameLength;
+		int databaseNameLength = 0;
+		memcpy(&databaseNameLength, val, sizeof(int));
+
+		val += sizeof(int);
+		char databaseName[512];
+		memcpy(databaseName, val, databaseNameLength);
+
+
 		HANDSHAKE_DEBUG(fprintf(stderr, "ImpersonateServer (impersonating user) %s\n", val));
 
 		string impersonateUser;
-		impersonateUser.assign(val, length);
+		impersonateUser.assign(username, usernameLength);
+
+		PathName secDbName;
+		secDbName.assign(databaseName, databaseNameLength);
 
 		bool found = false;
 		char impersonateStaffId[20 + 1];
 		{ // instance scope
-			// Get database block from cache
+			// Get database block from cache		
+			// secDbName.assign("D:\\ICE\\PRINT SOEICE.FDB");
+
 			CachedUserDatabase::Instance instance;
-			userDbInstances->getInstance(iParameter, instance);
+			userDbInstances->getInstance(secDbName, instance);
 
 			secureDbName = instance->userDbName;
 			if (!instance->userDb)
